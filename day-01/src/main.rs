@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 static CONTENTS: &str = include_str!("../input");
 
 fn part1() {
@@ -36,6 +38,21 @@ fn part1() {
         "Elf {} (1-indexed) carrying total calories {}\n",
         maxelf + 1,
         maxcals
+    );
+}
+
+fn part1_take2() {
+    print!(
+        "max cals: {}\n",
+        CONTENTS
+            .lines()
+            .into_iter()
+            .group_by(|line| (*line).is_empty())
+            .into_iter()
+            .filter_map(|(empty, group)| if empty { None } else { Some(group) })
+            .map(|group| group.fold(0, |acc, line| acc + line.parse::<usize>().unwrap()))
+            .max()
+            .unwrap()
     );
 }
 
@@ -120,5 +137,6 @@ fn part2() {
 
 fn main() {
     part1();
+    part1_take2();
     part2();
 }
