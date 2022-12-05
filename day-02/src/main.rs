@@ -55,8 +55,8 @@ fn round_score(op: Play, yp: Play) -> u64 {
     let ss = shape_score(yp);
     let os = outcome_score(op, yp);
 
-    print!(
-        "{}-{}: shape {}, outcome {}\n",
+    println!(
+        "{}-{}: shape {}, outcome {}",
         display(op),
         display(yp),
         ss,
@@ -75,7 +75,7 @@ fn part1() {
             round_score(opponent_play(plays[0]), your_play(plays[1]))
         })
         .fold(0, |acc, score| acc + score);
-    print!("Part 1 score: {}\n", score);
+    println!("Part 1 score: {}", score);
 }
 
 fn to_play(p: u8) -> Play {
@@ -109,7 +109,7 @@ fn part2() {
             s
         })
         .fold(0, |acc, score| acc + score);
-    print!("Part 2 score: {}\n", score);
+    println!("Part 2 score: {}", score);
 }
 
 fn main() {

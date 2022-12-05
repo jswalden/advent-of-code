@@ -29,7 +29,7 @@ fn part1() {
         })
         .sum();
 
-    print!("total nested ranges: {}\n", count);
+    println!("total nested ranges: {}", count);
 }
 
 fn part2() {
@@ -61,7 +61,7 @@ fn part2() {
         })
         .sum();
 
-    print!("total overlapping ranges: {}\n", count);
+    println!("total overlapping ranges: {}", count);
 }
 
 fn main() {

@@ -34,16 +34,16 @@ fn part1() {
         maxelf = elf;
     }
 
-    print!(
-        "Elf {} (1-indexed) carrying total calories {}\n",
+    println!(
+        "Elf {} (1-indexed) carrying total calories {}",
         maxelf + 1,
         maxcals
     );
 }
 
 fn part1_take2() {
-    print!(
-        "max cals: {}\n",
+    println!(
+        "max cals: {}",
         CONTENTS
             .lines()
             .into_iter()
@@ -119,8 +119,8 @@ fn part2() {
     top_three.insert(elf, running_calories);
 
     let print_elf_and_calories = |num: &str, elf_and_calories: &ElfAndCalories| {
-        print!(
-            "{}: elf {} ({} cal)\n",
+        println!(
+            "{}: elf {} ({} cal)",
             num, elf_and_calories.elf, elf_and_calories.calories
         );
     };
@@ -129,8 +129,8 @@ fn part2() {
     print_elf_and_calories("2nd", &top_three.mid);
     print_elf_and_calories("3rd", &top_three.lo);
 
-    print!(
-        "top three total: {}\n",
+    println!(
+        "top three total: {}",
         top_three.hi.calories + top_three.mid.calories + top_three.lo.calories
     );
 }

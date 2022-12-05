@@ -30,7 +30,7 @@ fn part1() {
         })
         .fold(0u64, |acc, p| acc + p);
 
-    print!("sum of priorities: {}\n", sum);
+    println!("sum of priorities: {}", sum);
 }
 
 fn part2() {
@@ -48,7 +48,7 @@ fn part2() {
         })
         .fold(0u64, |acc, p| acc + p);
 
-    print!("sum of badges for rucksack triplets: {}\n", sum);
+    println!("sum of badges for rucksack triplets: {}", sum);
 }
 
 fn main() {
