@@ -279,10 +279,10 @@ noop
 noop
 noop",
     );
-    let mut screen = draw_screen(&example_insts);
+    let screen = draw_screen(&example_insts);
     display_screen(&screen);
 
     println!("Part 2 screen:");
-    let mut screen = draw_screen(&insts);
+    let screen = draw_screen(&insts);
     display_screen(&screen);
 }
