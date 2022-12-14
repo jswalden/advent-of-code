@@ -368,6 +368,4 @@ fn main() {
     find_shortest_path_length(&grid);
 
     find_shortest_path_length_any_start(&grid);
-
-    println!("Hello, world!");
 }
