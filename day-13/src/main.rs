@@ -55,22 +55,10 @@ impl<'a> Iterator for Tokens<'a> {
 
                     assert!(c.is_digit(10));
 
-                    let mut digits = String::new();
-                    digits.push(self.stream.next().expect("digit"));
-
-                    loop {
-                        let nextc = match self.stream.peek() {
-                            None => break,
-                            Some(nextc) => *nextc,
-                        };
-
-                        if !nextc.is_digit(10) {
-                            break;
-                        }
-
-                        self.stream.next();
-                        digits.push(nextc);
-                    }
+                    let digits = self
+                        .stream
+                        .take_while_ref(|c| c.is_digit(10))
+                        .collect::<String>();
 
                     return Some(Token::Integer(digits.parse().expect("integer")));
                 }
@@ -303,6 +291,7 @@ fn main() {
         "sum of indexes of right-ordered pairs: {}",
         sum_right_ordered_pairs_indices
     );
+    assert_eq!(sum_right_ordered_pairs_indices, 5013);
 
     let div1 = Packet::List(vec![Packet::List(vec![Packet::Int(2)])]);
     let div2 = Packet::List(vec![Packet::List(vec![Packet::Int(6)])]);
@@ -331,5 +320,7 @@ fn main() {
         index_div1, index_div2
     );
 
-    println!("product of indexes: {}", index_div1 * index_div2);
+    let prod = index_div1 * index_div2;
+    println!("product of indexes: {}", prod);
+    assert_eq!(prod, 25038);
 }
