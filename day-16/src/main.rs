@@ -283,46 +283,46 @@ impl ShortestDistanceInfo {
 
         path_elem.dist
     }
-}
 
-fn build_shortest_distance_info(graph: &ValveGraph) -> ShortestDistanceInfo {
-    let num_valves = graph.valve_count();
+    fn new(graph: &ValveGraph) -> ShortestDistanceInfo {
+        let num_valves = graph.valve_count();
 
-    let mut matrix = Matrix2D::<PathElem>::new(num_valves, num_valves);
+        let mut matrix = Matrix2D::<PathElem>::new(num_valves, num_valves);
 
-    // For every tunnel, note distance 1 between valves with destination valve
-    // as next valve to visit.
-    for (ValveId(from), ValveId(to)) in graph.edges() {
-        matrix[(from, to)] = PathElem {
-            dist: Dist(1),
-            next: to,
-        };
-    }
+        // For every tunnel, note distance 1 between valves with destination valve
+        // as next valve to visit.
+        for (ValveId(from), ValveId(to)) in graph.edges() {
+            matrix[(from, to)] = PathElem {
+                dist: Dist(1),
+                next: to,
+            };
+        }
 
-    // No distance or next valve for each valve to itself.
-    for i in 0..num_valves {
-        matrix[(i, i)] = PathElem {
-            dist: Dist(0),
-            next: usize::MAX,
-        };
-    }
-
-    // Extend paths out from each valve.
-    for k in 0..num_valves {
+        // No distance or next valve for each valve to itself.
         for i in 0..num_valves {
-            for j in 0..num_valves {
-                let ik_dist = matrix[(i, k)].dist;
-                let kj_dist = matrix[(k, j)].dist;
-                let cand_dist = ik_dist + kj_dist;
-                if matrix[(i, j)].dist > cand_dist {
-                    matrix[(i, j)].dist = cand_dist;
-                    matrix[(i, j)].next = k;
+            matrix[(i, i)] = PathElem {
+                dist: Dist(0),
+                next: usize::MAX,
+            };
+        }
+
+        // Extend paths out from each valve.
+        for k in 0..num_valves {
+            for i in 0..num_valves {
+                for j in 0..num_valves {
+                    let ik_dist = matrix[(i, k)].dist;
+                    let kj_dist = matrix[(k, j)].dist;
+                    let cand_dist = ik_dist + kj_dist;
+                    if matrix[(i, j)].dist > cand_dist {
+                        matrix[(i, j)].dist = cand_dist;
+                        matrix[(i, j)].next = k;
+                    }
                 }
             }
         }
-    }
 
-    ShortestDistanceInfo { matrix }
+        ShortestDistanceInfo { matrix }
+    }
 }
 
 fn minimize_graph(
@@ -538,7 +538,7 @@ Valve JJ has flow rate=21; tunnel leads to valve II";
 
     let graph = build_valve_graph(CONTENT);
 
-    let shortest_distances = build_shortest_distance_info(&graph);
+    let shortest_distances = ShortestDistanceInfo::new(&graph);
 
     assert_eq!(
         shortest_distances.shortest_path(&graph, "AA", "EE"),
@@ -575,7 +575,7 @@ fn main() {
 
     let graph = build_valve_graph(CONTENT);
 
-    let shortest_distances = build_shortest_distance_info(&graph);
+    let shortest_distances = ShortestDistanceInfo::new(&graph);
 
     let (min_graph, min_shortest_distances) = minimize_graph(&graph, &shortest_distances);
 
