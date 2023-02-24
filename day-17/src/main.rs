@@ -17,66 +17,48 @@ fn to_jet_pattern(input: &str) -> Vec<Push> {
         .collect::<Vec<_>>()
 }
 
-type RockInfo = (&'static [u8], usize, usize);
+/// The first element of each tuple is the rock, encoded as its layers fro
+/// bottom to top, smashed against the right wall.  The second element is the
+/// width of the rock at its widest.
+type RockInfo = (&'static [u8], usize);
 
 /// Array of rock-tuples:
-///
-/// * The first element of each tuple is the rock, encoded as its layers fro
-///    bottom to top, smashed against the right wall.
-/// * The second element is the width of the rock at its widest.
-/// * The third element of each tuple is the amount the rock should be
-///   left-shifted to place it in starting position horizontally.
 const ROCKS: [RockInfo; 5] = [
-    (&[0b1111], 4, 1),
-    (&[0b010, 0b111, 0b010], 3, 2),
-    (&[0b111, 0b001, 0b001], 3, 2),
-    (&[0b1, 0b1, 0b1, 0b1], 1, 4),
-    (&[0b11, 0b11], 2, 3),
+    (&[0b1111], 4),
+    (&[0b010, 0b111, 0b010], 3),
+    (&[0b111, 0b001, 0b001], 3),
+    (&[0b1, 0b1, 0b1, 0b1], 1),
+    (&[0b11, 0b11], 2),
 ];
-
-const CHAMBER_WIDTH: usize = 7;
-const EMPTY_SPACE_HEIGHT: usize = 3;
 
 struct Chamber {
     layers: Vec<u8>,
     tower_height: u64,
-    column_heights: [usize; CHAMBER_WIDTH],
 }
 
 impl Chamber {
+    const WIDTH: usize = 7;
+    const LAYERS_ABOVE: usize = 3;
+
     fn new() -> Chamber {
         Chamber {
-            layers: vec![0b000_0000; EMPTY_SPACE_HEIGHT],
+            layers: vec![],
             tower_height: 0,
-            column_heights: [0; CHAMBER_WIDTH],
         }
-    }
-
-    fn tower_height(&self) -> u64 {
-        let chamber_layers = &self.layers;
-        assert!(
-            (&chamber_layers[chamber_layers.len() - EMPTY_SPACE_HEIGHT..])
-                .iter()
-                .all(|layer| *layer == 0),
-            "must have expected empty space above"
-        );
-        assert!(
-            chamber_layers.len() == EMPTY_SPACE_HEIGHT
-                || chamber_layers[chamber_layers.len() - EMPTY_SPACE_HEIGHT - 1] != 0,
-            "must have nonempty layer beneath them"
-        );
-
-        self.tower_height
     }
 }
 
-fn rock_overlaps_chamber(
+fn rock_overlaps_tower(
     rock: &[u8],
     rock_bottom_idx: usize,
     rock_offset: usize,
     chamber: &Chamber,
 ) -> bool {
     let chamber_layers = &chamber.layers;
+    if rock_bottom_idx >= chamber_layers.len() {
+        return false;
+    }
+
     rock.iter()
         .zip(&chamber_layers[rock_bottom_idx..])
         .any(|(rock_layer, chamber_layer)| chamber_layer & (rock_layer << rock_offset) != 0)
@@ -98,7 +80,7 @@ fn dump_chamber(desc: &str, i: usize, chamber: &Chamber) {
 
     {
         let mut floor = String::from("+");
-        floor += "-".repeat(CHAMBER_WIDTH as usize).as_str();
+        floor += "-".repeat(Chamber::WIDTH).as_str();
         floor.push('+');
         out.push(floor);
     }
@@ -106,7 +88,7 @@ fn dump_chamber(desc: &str, i: usize, chamber: &Chamber) {
     for layer in chamber {
         let mut line = String::from("|");
 
-        let mut b = (1 as u8) << (CHAMBER_WIDTH - 1);
+        let mut b = (1 as u8) << (Chamber::WIDTH - 1);
         while b > 0 {
             line.push(if b & *layer != 0 { '#' } else { '.' });
             b >>= 1;
@@ -114,6 +96,14 @@ fn dump_chamber(desc: &str, i: usize, chamber: &Chamber) {
 
         line.push('|');
         out.push(line);
+    }
+
+    let mut empty = String::new();
+    empty.push('|');
+    empty.push_str(&".".repeat(Chamber::WIDTH));
+    empty.push('|');
+    for _ in 0..Chamber::LAYERS_ABOVE {
+        out.push(empty.clone());
     }
 
     out.reverse();
@@ -141,12 +131,16 @@ fn dump_chamber_and_falling_rock(
 
     {
         let mut floor = String::from("+");
-        floor += "-".repeat(CHAMBER_WIDTH as usize).as_str();
+        floor += "-".repeat(Chamber::WIDTH).as_str();
         floor.push('+');
         out.push(floor);
     }
 
-    for (i, layer) in chamber.iter().enumerate() {
+    for (i, layer) in chamber
+        .iter()
+        .chain(std::iter::repeat(&0).take(Chamber::LAYERS_ABOVE))
+        .enumerate()
+    {
         let mut line = String::from("|");
 
         let rock_contrib = if rock_bottom_idx <= i && i < rock_bottom_idx + rock.len() {
@@ -157,7 +151,7 @@ fn dump_chamber_and_falling_rock(
 
         let layer = *layer | rock_contrib;
 
-        let mut b = (1 as u8) << (CHAMBER_WIDTH - 1);
+        let mut b = (1 as u8) << (Chamber::WIDTH - 1);
         while b > 0 {
             line.push(if b & layer != 0 { '#' } else { '.' });
             b >>= 1;
@@ -178,10 +172,11 @@ fn run(
     (mut rock_idx, mut jet_idx): (usize, usize),
 ) -> (usize, usize) {
     for i in 0..num_rocks {
-        let (rock, rock_width, rock_starting_offset) = ROCKS[rock_idx];
+        let (rock, rock_width) = ROCKS[rock_idx];
         rock_idx = (rock_idx + 1) % ROCKS.len();
 
-        let mut rock_bottom_idx = chamber.layers.len();
+        let rock_starting_offset = Chamber::WIDTH - 2 - rock_width;
+        let mut rock_bottom_idx = chamber.layers.len() + Chamber::LAYERS_ABOVE;
         let mut rock_offset = rock_starting_offset;
 
         loop {
@@ -203,8 +198,8 @@ fn run(
                 Push::Right => rock_offset.saturating_sub(1),
             };
             if cand_rock_offset != rock_offset {
-                if cand_rock_offset + rock_width <= CHAMBER_WIDTH {
-                    if !rock_overlaps_chamber(rock, rock_bottom_idx, cand_rock_offset, chamber) {
+                if cand_rock_offset + rock_width <= Chamber::WIDTH {
+                    if !rock_overlaps_tower(rock, rock_bottom_idx, cand_rock_offset, chamber) {
                         rock_offset = cand_rock_offset;
                     }
                 }
@@ -224,7 +219,7 @@ fn run(
                 break;
             }
 
-            if rock_overlaps_chamber(rock, rock_bottom_idx - 1, rock_offset, chamber) {
+            if rock_overlaps_tower(rock, rock_bottom_idx - 1, rock_offset, chamber) {
                 break;
             }
 
@@ -242,31 +237,7 @@ fn run(
             let chamber_layer = &mut chamber.layers[chamber_layer_idx];
             let rock = *rock_layer << rock_offset;
             *chamber_layer |= rock;
-
-            let mut rock_bits = rock;
-            let mut col = 0;
-            while rock_bits > 0 {
-                if rock_bits & 1 != 0 {
-                    chamber.column_heights[col] =
-                        chamber.column_heights[col].max(chamber_layer_idx + 1);
-                }
-
-                rock_bits >>= 1;
-                col += 1;
-            }
         }
-
-        let empty_layers_count = chamber
-            .layers
-            .iter()
-            .rev()
-            .take(EMPTY_SPACE_HEIGHT)
-            .take_while(|layer| **layer == 0)
-            .count();
-        (empty_layers_count..EMPTY_SPACE_HEIGHT).for_each(|_| {
-            chamber.layers.push(0b000_0000);
-            chamber.tower_height += 1
-        });
 
         dump_chamber("after placement:", i, chamber);
     }
@@ -284,8 +255,8 @@ fn part1(jet_pattern: &Vec<Push>, expected: u64) {
         run(&mut chamber, &jet_pattern, NUM_ROCKS, (rock_idx, jet_idx));
     assert_eq!(next_rock_idx, NUM_ROCKS % ROCKS.len());
 
-    let tower_height = chamber.tower_height();
-    println!("Tower height: {tower_height}");
+    let tower_height = chamber.tower_height;
+    println!("Part 1 tower height: {tower_height}");
     assert_eq!(tower_height, expected);
 }
 
@@ -311,7 +282,7 @@ fn part2(jet_pattern: &Vec<Push>, expected_tower_height: u64) {
     let mut seen = HashMap::<Key, Value>::new();
 
     let mut found_cycle = false;
-    loop {
+    while rocks_dropped < GAZILLION_ROCKS_DROPPED_COUNT {
         (rock_idx, jet_idx) = run(&mut chamber, jet_pattern, 1, (rock_idx, jet_idx));
         rocks_dropped += 1;
 
@@ -325,7 +296,7 @@ fn part2(jet_pattern: &Vec<Push>, expected_tower_height: u64) {
                         found_cycle = true;
 
                         let cycle_length = rocks_dropped_delta;
-                        let cycle_height_increase = chamber.tower_height() - val.tower_height;
+                        let cycle_height_increase = chamber.tower_height - val.tower_height;
 
                         let cycle_count =
                             (GAZILLION_ROCKS_DROPPED_COUNT - rocks_dropped) / cycle_length;
@@ -336,27 +307,27 @@ fn part2(jet_pattern: &Vec<Push>, expected_tower_height: u64) {
 
                     val.rocks_dropped_delta = rocks_dropped_delta;
                     val.rocks_dropped = rocks_dropped;
-                    val.tower_height = chamber.tower_height();
+                    val.tower_height = chamber.tower_height;
                 }
                 Entry::Vacant(ve) => {
                     ve.insert(Value {
                         rocks_dropped_delta: 0,
                         rocks_dropped,
-                        tower_height: chamber.tower_height(),
+                        tower_height: chamber.tower_height,
                     });
                 }
             }
-        }
 
-        if rocks_dropped == GAZILLION_ROCKS_DROPPED_COUNT {
-            break;
+            if found_cycle {
+                seen.clear();
+            }
         }
     }
 
     assert!(rocks_dropped == GAZILLION_ROCKS_DROPPED_COUNT);
 
-    let total_tower_height = chamber.tower_height();
-    println!("Total tower height: {total_tower_height}");
+    let total_tower_height = chamber.tower_height;
+    println!("Part 2 total tower height: {total_tower_height}");
     assert_eq!(total_tower_height, expected_tower_height);
 }
 
