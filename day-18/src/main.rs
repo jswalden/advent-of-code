@@ -1,11 +1,37 @@
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 type Coord = u8;
 
-#[derive(Ord, PartialOrd, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct Cube(Coord, Coord, Coord);
 
-fn parse_cube_list(input: &str) -> Vec<Cube> {
+fn for_all_adjacent_cubes<F>(state: &mut FloodState, Cube(x, y, z): Cube, mut f: F)
+where
+    F: FnMut(&mut FloodState, Cube),
+{
+    if x > state.x.0 {
+        f(state, Cube(x - 1, y, z));
+    }
+    if x < state.x.1 {
+        f(state, Cube(x + 1, y, z));
+    }
+    if y > state.y.0 {
+        f(state, Cube(x, y - 1, z));
+    }
+    if y < state.y.1 {
+        f(state, Cube(x, y + 1, z));
+    }
+    if z > state.z.0 {
+        f(state, Cube(x, y, z - 1));
+    }
+    if z < state.z.1 {
+        f(state, Cube(x, y, z + 1));
+    }
+}
+
+fn parse_cube_list(input: &str) -> HashSet<Cube> {
     input
         .lines()
         .map(|line| {
@@ -43,47 +69,145 @@ where
     f(Side((x, y, z + 1), Normal::Z));
 }
 
-fn sum_surface_area(cubes: &Vec<Cube>) -> u64 {
-    let mut sides = HashMap::<Side, u8>::new();
+fn sum_surface_area(cubes: &HashSet<Cube>) -> u64 {
+    let mut sides = HashMap::<Side, ()>::new();
 
     for cube in cubes {
-        for_all_sides(&cube, |side| {
-            sides
-                .entry(side)
-                .and_modify(|count| {
-                    assert!(*count == 1, "can only see side one prior time");
-                    *count += 1;
-                })
-                .or_insert(1);
+        for_all_sides(&cube, |side| match sides.entry(side) {
+            Entry::Occupied(e) => {
+                e.remove_entry();
+            }
+            Entry::Vacant(v) => {
+                v.insert(());
+            }
         });
     }
 
-    sides.iter().filter(|(_side, count)| **count == 1).count() as u64
+    sides.len() as u64
 }
 
-fn sum_exterior_surface_area(cubes: &Vec<Cube>) -> u64 {
-    sum_surface_area(cubes)
+struct MinMax(Coord, Coord);
+
+impl Default for MinMax {
+    fn default() -> MinMax {
+        MinMax(Coord::MAX, Coord::MIN)
+    }
 }
 
-fn part1(cubes: &Vec<Cube>, expected_surface_area: u64) {
+struct FloodState<'a> {
+    x: MinMax,
+    y: MinMax,
+    z: MinMax,
+    cubes: &'a HashSet<Cube>,
+    outside_cubes: HashSet<Cube>,
+}
+
+impl<'a> FloodState<'a> {
+    fn new(cubes: &HashSet<Cube>) -> FloodState {
+        let mut x = MinMax::default();
+        let mut y = MinMax::default();
+        let mut z = MinMax::default();
+
+        for cube in cubes {
+            x.0 = x.0.min(cube.0);
+            x.1 = x.1.max(cube.0);
+            y.0 = y.0.min(cube.1);
+            y.1 = y.1.max(cube.1);
+            z.0 = z.0.min(cube.2);
+            z.1 = z.1.max(cube.2);
+        }
+
+        FloodState {
+            x,
+            y,
+            z,
+            cubes,
+            outside_cubes: HashSet::new(),
+        }
+    }
+
+    fn enclosed_surface_area(mut self) -> u64 {
+        fn flood(state: &mut FloodState, outside_cube: Cube) {
+            if state.cubes.contains(&outside_cube) || state.outside_cubes.contains(&&outside_cube) {
+                return;
+            }
+
+            state.outside_cubes.insert(outside_cube);
+            for_all_adjacent_cubes(state, outside_cube, flood);
+        }
+
+        // x=min, x=max planes
+        for z in self.z.0..=self.z.1 {
+            for y in self.y.0..=self.y.1 {
+                let MinMax(min_x, max_x) = self.x;
+                flood(&mut self, Cube(min_x, y, z));
+                flood(&mut self, Cube(max_x, y, z));
+            }
+        }
+
+        // y=min, y=max planes
+        for z in self.z.0..=self.z.1 {
+            for x in self.x.0..=self.x.1 {
+                let MinMax(min_y, max_y) = self.y;
+                flood(&mut self, Cube(x, min_y, z));
+                flood(&mut self, Cube(x, max_y, z));
+            }
+        }
+
+        // z=min, z=max planes
+        for x in self.x.0..=self.x.1 {
+            for y in self.y.0..=self.y.1 {
+                let MinMax(min_z, max_z) = self.z;
+                flood(&mut self, Cube(x, y, min_z));
+                flood(&mut self, Cube(x, y, max_z));
+            }
+        }
+
+        let mut enclosed = HashSet::new();
+
+        for x in self.x.0..=self.x.1 {
+            for y in self.y.0..=self.y.1 {
+                for z in self.z.0..=self.z.1 {
+                    let cube = Cube(x, y, z);
+                    if !self.outside_cubes.contains(&cube) {
+                        enclosed.insert(cube);
+                    }
+                }
+            }
+        }
+
+        sum_surface_area(&enclosed)
+    }
+}
+
+fn sum_exterior_surface_area(cubes: &HashSet<Cube>) -> u64 {
+    let state = FloodState::new(cubes);
+    state.enclosed_surface_area()
+}
+
+fn part1(cubes: &HashSet<Cube>, expected_surface_area: u64) {
     let surface_area = sum_surface_area(cubes);
     println!("Part 1 surface area: {surface_area}");
     assert_eq!(surface_area, expected_surface_area);
 }
 
-fn part2(cubes: &Vec<Cube>, expected_surface_area: u64) {
+fn part2(cubes: &HashSet<Cube>, expected_surface_area: u64) {
     let surface_area = sum_exterior_surface_area(cubes);
-    println!("Part 2 surface area: {surface_area} (expected {expected_surface_area})");
-    //assert_eq!(surface_area, expected_surface_area);
+    println!("Part 2 surface area: {surface_area}");
+    assert_eq!(surface_area, expected_surface_area);
 }
 
 #[test]
 fn basic_sides() {
-    let one_cube = vec![Cube(1, 1, 1)];
+    let mut one_cube = HashSet::new();
+    one_cube.insert(Cube(1, 1, 1));
     assert_eq!(sum_surface_area(&one_cube), 6);
+    assert_eq!(sum_exterior_surface_area(&one_cube), 6);
 
-    let two_adjacent_cubes = vec![Cube(1, 1, 1), Cube(2, 1, 1)];
+    let mut two_adjacent_cubes = HashSet::new();
+    two_adjacent_cubes.extend(vec![Cube(1, 1, 1), Cube(2, 1, 1)]);
     assert_eq!(sum_surface_area(&two_adjacent_cubes), 10);
+    assert_eq!(sum_exterior_surface_area(&two_adjacent_cubes), 10);
 }
 
 #[test]
@@ -114,5 +238,5 @@ fn main() {
     let cubes = parse_cube_list(INPUT);
 
     part1(&cubes, 4364);
-    part2(&cubes, 999999999);
+    part2(&cubes, 2508);
 }
