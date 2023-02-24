@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 type Coord = u8;
 
+#[derive(Ord, PartialOrd, PartialEq, Eq, Debug)]
 struct Cube(Coord, Coord, Coord);
 
 fn parse_cube_list(input: &str) -> Vec<Cube> {
@@ -60,10 +61,20 @@ fn sum_surface_area(cubes: &Vec<Cube>) -> u64 {
     sides.iter().filter(|(_side, count)| **count == 1).count() as u64
 }
 
+fn sum_exterior_surface_area(cubes: &Vec<Cube>) -> u64 {
+    sum_surface_area(cubes)
+}
+
 fn part1(cubes: &Vec<Cube>, expected_surface_area: u64) {
     let surface_area = sum_surface_area(cubes);
     println!("Part 1 surface area: {surface_area}");
     assert_eq!(surface_area, expected_surface_area);
+}
+
+fn part2(cubes: &Vec<Cube>, expected_surface_area: u64) {
+    let surface_area = sum_exterior_surface_area(cubes);
+    println!("Part 2 surface area: {surface_area} (expected {expected_surface_area})");
+    //assert_eq!(surface_area, expected_surface_area);
 }
 
 #[test]
@@ -92,12 +103,16 @@ fn example() {
 2,3,5";
 
     let cubes = parse_cube_list(INPUT);
+
     part1(&cubes, 64);
+    part2(&cubes, 58);
 }
 
 fn main() {
     static INPUT: &str = include_str!("../input");
 
     let cubes = parse_cube_list(INPUT);
+
     part1(&cubes, 4364);
+    part2(&cubes, 999999999);
 }
