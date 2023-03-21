@@ -40,10 +40,28 @@ enum Horizontal {
     Right,
 }
 
+impl Horizontal {
+    fn step(&self) -> isize {
+        match self {
+            Horizontal::Left => -1,
+            Horizontal::Right => 1,
+        }
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum Vertical {
     Up,
     Down,
+}
+
+impl Vertical {
+    fn step(&self) -> isize {
+        match self {
+            Vertical::Up => -1,
+            Vertical::Down => 1,
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -96,8 +114,17 @@ impl Direction {
     }
 }
 
+#[derive(Copy, Clone)]
+enum Folding {
+    Unfolded,
+    Cube,
+}
+
 struct BoardMap {
     tiles: Vec<Vec<Tile>>,
+    width: usize,
+    height: usize,
+    side_width: usize,
 }
 
 impl Debug for BoardMap {
@@ -110,95 +137,143 @@ impl Debug for BoardMap {
     }
 }
 
+fn wrapping_add(coord: usize, amt: isize, limit: usize) -> usize {
+    if coord == 0 && amt < 0 {
+        return limit.checked_add_signed(amt).unwrap();
+    }
+
+    if coord == limit - 1 && amt > 0 {
+        return amt as usize - 1;
+    }
+
+    coord
+        .checked_add_signed(amt)
+        .expect("amt must be smaller magnitude than side size")
+}
+
 impl BoardMap {
-    fn new(s: &str) -> BoardMap {
-        let mut tiles = s
+    fn new(s: &'static str, side_width: usize) -> BoardMap {
+        let (mut tiles, width) = s
             .lines()
             .map(|line| {
-                line.chars()
+                let tiles = line
+                    .chars()
                     .map(|c| match c {
                         ' ' => Tile::Absent,
                         '.' => Tile::Open,
                         '#' => Tile::Wall,
                         c => panic!("unexpected tile: {c:?}"),
                     })
-                    .collect::<Vec<_>>()
+                    .collect::<Vec<_>>();
+                let tiles_len = tiles.len();
+                (tiles, tiles_len)
             })
-            .collect::<Vec<_>>();
-
-        let max_width = tiles.iter().map(|v| v.len()).max().unwrap();
+            .fold(
+                (vec![], 0),
+                |(mut tiles_list, max_width): (Vec<Vec<Tile>>, usize),
+                 (tiles, width): (Vec<Tile>, usize)| {
+                    tiles_list.push(tiles);
+                    (tiles_list, max_width.max(width))
+                },
+            );
 
         for v in &mut tiles {
-            v.resize(max_width, Tile::Absent);
+            v.resize(width, Tile::Absent);
         }
 
-        BoardMap { tiles }
+        let height = tiles.len();
+
+        assert!(width % side_width == 0);
+        assert!(height % side_width == 0);
+        BoardMap {
+            tiles,
+            width,
+            height,
+            side_width,
+        }
     }
 
     fn tile_at(&self, x: usize, y: usize) -> Tile {
         self.tiles[y][x]
     }
 
-    fn move_y(&self, x: usize, y: usize, vert: Vertical) -> Option<usize> {
-        assert!(
-            self.tile_at(x, y) == Tile::Open,
-            "must have valid starting position"
-        );
+    fn step(
+        &self,
+        x: usize,
+        y: usize,
+        dir: Direction,
+        folding: Folding,
+    ) -> ((usize, usize), Direction) {
+        // First try moving straight in the current direction.
+        let (trial_x, trial_y) = match dir {
+            Direction::Horizontal(h) => {
+                let new_x = wrapping_add(x, h.step(), self.tiles[y].len());
+                (new_x, y)
+            }
+            Direction::Vertical(v) => {
+                let new_y = wrapping_add(y, v.step(), self.tiles.len());
+                (x, new_y)
+            }
+        };
 
-        let mut current_y = y;
-        loop {
-            let cand_y = match vert {
-                Vertical::Up => {
-                    if current_y == 0 {
-                        self.tiles.len() - 1
-                    } else {
-                        current_y - 1
+        match (self.tile_at(trial_x, trial_y), folding) {
+            (_, Folding::Unfolded) | (Tile::Wall | Tile::Open, _) => {
+                // If we're not folding a cube or we're not walking off the cube
+                // sides, return the trial location and previous direction.
+                ((trial_x, trial_y), dir)
+            }
+            (Tile::Absent, Folding::Cube) => {
+                // If we're walking off the side while folding a cube, compute
+                // the location x/y fold up against and the altered direction.
+                let (xrem, yrem) = (x % self.side_width, y % self.side_width);
+
+                match dir {
+                    Direction::Vertical(v) => {
+                        let x_comp = self.side_width - 1 - yrem;
+
+                        let (x_lower, x_higher) = {
+                            let x_start = x - x_comp;
+
+                            let x_lower = if x_start == 0 {
+                                self.width
+                            } else {
+                                x_start - 1
+                            };
+                            let x_higher = x_start + self.side_width;
+
+                            (x_lower, x_higher)
+                        };
+
+                        // Try x_higher side.
+                    }
+                    Direction::Horizontal(h) => {
+                        let y_comp = self.side_width - 1 - xrem;
                     }
                 }
-                Vertical::Down => {
-                    if current_y == self.tiles.len() - 1 {
-                        0
-                    } else {
-                        current_y + 1
-                    }
-                }
-            };
-            match self.tile_at(x, cand_y) {
-                Tile::Wall => return None,
-                Tile::Open => return Some(cand_y),
-                Tile::Absent => current_y = cand_y,
+                todo!();
             }
         }
     }
 
-    fn move_x(&self, x: usize, y: usize, horiz: Horizontal) -> Option<usize> {
-        assert!(
-            self.tile_at(x, y) == Tile::Open,
-            "must have valid starting position"
-        );
+    fn move_one(
+        &self,
+        x: usize,
+        y: usize,
+        dir: Direction,
+        folding: Folding,
+    ) -> Option<((usize, usize), Direction)> {
+        assert!(self.tile_at(x, y) == Tile::Open, "x/y must be valid");
 
-        let mut current_x = x;
+        let (mut current_x, mut current_y, mut current_dir) = (x, y, dir);
         loop {
-            let cand_x = match horiz {
-                Horizontal::Left => {
-                    if current_x == 0 {
-                        self.tiles[y].len() - 1
-                    } else {
-                        current_x - 1
-                    }
-                }
-                Horizontal::Right => {
-                    if current_x == self.tiles[y].len() - 1 {
-                        0
-                    } else {
-                        current_x + 1
-                    }
-                }
-            };
-            match self.tile_at(cand_x, y) {
+            let ((cand_x, cand_y), cand_dir) =
+                self.step(current_x, current_y, current_dir, folding);
+            match self.tile_at(cand_x, cand_y) {
                 Tile::Wall => return None,
-                Tile::Open => return Some(cand_x),
-                Tile::Absent => current_x = cand_x,
+                Tile::Open => return Some(((cand_x, cand_y), cand_dir)),
+                Tile::Absent => {
+                    ((current_x, current_y), current_dir) = ((cand_x, cand_y), cand_dir)
+                }
             }
         }
     }
@@ -208,7 +283,8 @@ impl BoardMap {
         (start_x, start_y): (usize, usize),
         dir: Direction,
         dist: Dist,
-    ) -> (usize, usize) {
+        folding: Folding,
+    ) -> ((usize, usize), Direction) {
         assert!(
             self.tile_at(start_x, start_y) == Tile::Open,
             "must have valid starting position"
@@ -217,28 +293,20 @@ impl BoardMap {
         //println!("computing move from (({start_x}, {start_y}), {dir:?}) by {dist}");
 
         let (mut pos_x, mut pos_y) = (start_x, start_y);
+        let mut curr_dir = dir;
         for _ in 0..dist {
-            match dir {
-                Direction::Horizontal(h) => {
-                    if let Some(new_x) = self.move_x(pos_x, pos_y, h) {
-                        pos_x = new_x;
-                    } else {
-                        break;
-                    }
-                }
-                Direction::Vertical(v) => {
-                    if let Some(new_y) = self.move_y(pos_x, pos_y, v) {
-                        pos_y = new_y;
-                    } else {
-                        break;
-                    }
-                }
-            };
+            if let Some(((new_x, new_y), new_dir)) = self.move_one(pos_x, pos_y, curr_dir, folding)
+            {
+                (pos_x, pos_y) = (new_x, new_y);
+                curr_dir = new_dir;
+            } else {
+                break;
+            }
             //println!("moved to ({pos_x}, {pos_y})...");
         }
 
         //println!("move complete");
-        (pos_x, pos_y)
+        ((pos_x, pos_y), dir)
     }
 
     fn at_start(&self) -> ((usize, usize), Direction) {
@@ -252,10 +320,11 @@ impl BoardMap {
     }
 }
 
-fn parse_board_map(s: &'static str) -> BoardMap {
-    BoardMap::new(s)
+fn parse_board_map(s: &'static str, side_width: usize) -> BoardMap {
+    BoardMap::new(s, side_width)
 }
 
+#[derive(Clone)]
 struct MoveIter {
     remaining: Peekable<Chars<'static>>,
 }
@@ -289,11 +358,14 @@ impl Iterator for MoveIter {
     }
 }
 
-fn parse_path_description(desc: &'static str) -> impl Iterator<Item = Movement> {
+fn parse_path_description(desc: &'static str) -> impl Iterator<Item = Movement> + Clone {
     MoveIter::new(desc)
 }
 
-fn parse_input(input: &'static str) -> (BoardMap, impl Iterator<Item = Movement>) {
+fn parse_input(
+    input: &'static str,
+    side_width: usize,
+) -> (BoardMap, impl Iterator<Item = Movement> + Clone) {
     {
         let mut iter = input.split("\n\n");
 
@@ -301,7 +373,7 @@ fn parse_input(input: &'static str) -> (BoardMap, impl Iterator<Item = Movement>
         let path_desc = iter.next().expect("path description").trim();
 
         (
-            parse_board_map(board_str),
+            parse_board_map(board_str, side_width),
             parse_path_description(path_desc),
         )
     }
@@ -311,9 +383,16 @@ fn parse_input(input: &'static str) -> (BoardMap, impl Iterator<Item = Movement>
 fn boards() {
     assert_eq!(
         parse_board_map(
-            "  ..#
-..#.##
-#....."
+            "  ..#.
+  #.
+  ..
+  ##
+  .#
+  ..
+#..#
+..#.
+",
+            2
         )
         .tiles,
         vec![
@@ -323,6 +402,54 @@ fn boards() {
                 Tile::Open,
                 Tile::Open,
                 Tile::Wall,
+                Tile::Open
+            ],
+            vec![
+                Tile::Absent,
+                Tile::Absent,
+                Tile::Wall,
+                Tile::Open,
+                Tile::Absent,
+                Tile::Absent
+            ],
+            vec![
+                Tile::Absent,
+                Tile::Absent,
+                Tile::Open,
+                Tile::Open,
+                Tile::Absent,
+                Tile::Absent
+            ],
+            vec![
+                Tile::Absent,
+                Tile::Absent,
+                Tile::Wall,
+                Tile::Wall,
+                Tile::Absent,
+                Tile::Absent
+            ],
+            vec![
+                Tile::Absent,
+                Tile::Absent,
+                Tile::Open,
+                Tile::Wall,
+                Tile::Absent,
+                Tile::Absent
+            ],
+            vec![
+                Tile::Absent,
+                Tile::Absent,
+                Tile::Open,
+                Tile::Open,
+                Tile::Absent,
+                Tile::Absent
+            ],
+            vec![
+                Tile::Wall,
+                Tile::Open,
+                Tile::Open,
+                Tile::Wall,
+                Tile::Absent,
                 Tile::Absent
             ],
             vec![
@@ -330,17 +457,9 @@ fn boards() {
                 Tile::Open,
                 Tile::Wall,
                 Tile::Open,
-                Tile::Wall,
-                Tile::Wall
+                Tile::Absent,
+                Tile::Absent
             ],
-            vec![
-                Tile::Wall,
-                Tile::Open,
-                Tile::Open,
-                Tile::Open,
-                Tile::Open,
-                Tile::Open
-            ]
         ]
     );
 }
@@ -362,7 +481,8 @@ fn paths() {
 
 fn find_final_position(
     board_map: &BoardMap,
-    path: &mut impl Iterator<Item = Movement>,
+    path: impl Iterator<Item = Movement>,
+    folding: Folding,
 ) -> ((usize, usize), Direction) {
     let ((mut x, mut y), mut dir) = board_map.at_start();
 
@@ -380,7 +500,7 @@ fn find_final_position(
     for movement in path {
         match movement {
             Movement::Forward(dist) => {
-                (x, y) = board_map.compute_move((x, y), dir, dist);
+                ((x, y), dir) = board_map.compute_move((x, y), dir, dist, folding);
             }
             Movement::Turn(turn) => dir = dir.apply_turn(turn),
         };
@@ -411,11 +531,13 @@ fn example() {
 
 10R5L5R10L4R5L5";
 
-    let (board_map, mut path) = parse_input(INPUT);
+    const SIDE_WIDTH: usize = 4;
+
+    let (board_map, path) = parse_input(INPUT, SIDE_WIDTH);
 
     // Part 1.
     {
-        let ((x, y), dir) = find_final_position(&board_map, &mut path);
+        let ((x, y), dir) = find_final_position(&board_map, path.clone(), Folding::Unfolded);
         println!("x: {x}, y: {y}, dir: {dir:?}");
         assert_eq!(
             (x + 1, y + 1, dir),
@@ -429,7 +551,7 @@ fn example() {
 
     // Part 2.
     {
-        let ((x, y), dir) = find_final_position(&board_map, &mut path);
+        let ((x, y), dir) = find_final_position(&board_map, path, Folding::Cube);
         println!("x: {x}, y: {y}, dir: {dir:?}");
         assert_eq!(
             (x + 1, y + 1, dir),
@@ -437,15 +559,17 @@ fn example() {
         );
 
         let password = compute_password(x, y, dir);
-        println!("Password: {password}");
-        assert_eq!(password, 6_032);
+        println!("Password: {password} (should equal 5031)");
+        //assert_eq!(password, 5_031);
     }
 }
 
 fn main() {
     static INPUT: &str = include_str!("../input");
 
-    let (board_map, mut path) = parse_input(INPUT);
+    const SIDE_WIDTH: usize = 50;
+
+    let (board_map, path) = parse_input(INPUT, SIDE_WIDTH);
     assert_eq!(
         board_map.at_start(),
         ((50, 0), Direction::Horizontal(Horizontal::Right))
@@ -453,7 +577,7 @@ fn main() {
 
     // Part 1.
     {
-        let ((x, y), dir) = find_final_position(&board_map, &mut path);
+        let ((x, y), dir) = find_final_position(&board_map, path.clone(), Folding::Unfolded);
         println!("x: {x}, y: {y}, dir: {dir:?}");
 
         let password = compute_password(x, y, dir);
@@ -463,7 +587,7 @@ fn main() {
 
     // Part 2.
     {
-        let ((x, y), dir) = find_final_position(&board_map, &mut path);
+        let ((x, y), dir) = find_final_position(&board_map, path, Folding::Cube);
         println!("x: {x}, y: {y}, dir: {dir:?}");
 
         let password = compute_password(x, y, dir);
