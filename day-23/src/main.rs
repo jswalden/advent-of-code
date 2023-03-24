@@ -194,7 +194,7 @@ impl State {
         true
     }
 
-    fn simulate_n_rounds(&mut self, rounds: usize) -> u64 {
+    fn simulate_n_rounds(&mut self, rounds: u32) -> u64 {
         for _ in 0..rounds {
             self.one_round();
         }
@@ -212,6 +212,17 @@ impl State {
 
         (p2.0 as i32 - p1.0 as i32 + 1) as u64 * (p2.1 as i32 - p1.1 as i32 + 1) as u64
             - self.elf_count as u64
+    }
+
+    fn simulate_until_no_movement(&mut self) -> u32 {
+        let mut n = 1;
+        loop {
+            if !self.one_round() {
+                break;
+            }
+            n += 1;
+        }
+        n
     }
 }
 
@@ -239,7 +250,7 @@ fn parse_input(s: &'static str) -> State {
     State::new(elves)
 }
 
-const PART1_ROUNDS: usize = 10;
+const PART1_ROUNDS: u32 = 10;
 
 #[test]
 fn small_example() {
@@ -253,7 +264,7 @@ fn small_example() {
     // Part 1.
     let mut state = parse_input(INPUT);
     let empty_squares = state.simulate_n_rounds(PART1_ROUNDS);
-    println!("Part 1 empty squares: {empty_squares} (should be 25)");
+    println!("Part 1 empty squares: {empty_squares}");
     assert_eq!(empty_squares, 5 * 6 - 5);
 }
 
@@ -270,8 +281,14 @@ fn example() {
     // Part 1.
     let mut state = parse_input(INPUT);
     let empty_squares = state.simulate_n_rounds(PART1_ROUNDS);
-    println!("Part 1 empty squares: {empty_squares} (should be 110)");
+    println!("Part 1 empty squares: {empty_squares}");
     assert_eq!(empty_squares, 110);
+
+    // Part 2.
+    let added_rounds = state.simulate_until_no_movement();
+    let rounds_til_no_motion = PART1_ROUNDS + added_rounds;
+    println!("Part 2: {rounds_til_no_motion} rounds to no movement");
+    assert_eq!(rounds_til_no_motion, 20);
 }
 
 fn main() {
@@ -280,6 +297,12 @@ fn main() {
     // Part 1.
     let mut state = parse_input(INPUT);
     let empty_squares = state.simulate_n_rounds(PART1_ROUNDS);
-    println!("Part 1 empty squares: {empty_squares} (should be 3766)");
+    println!("Part 1 empty squares: {empty_squares}");
     assert_eq!(empty_squares, 3766);
+
+    // Part 2.
+    let added_rounds = state.simulate_until_no_movement();
+    let rounds_til_no_motion = PART1_ROUNDS + added_rounds;
+    println!("Part 2: {rounds_til_no_motion} rounds to no movement");
+    assert_eq!(rounds_til_no_motion, 954);
 }
