@@ -162,7 +162,7 @@ fn example() {
 
     // Part 1.
     let sum = INPUT.lines().map(number_from_snafu).sum::<Snafu>();
-    println!("Sum of input numbers: {sum} (should be 4890)");
+    println!("Sum of input numbers: {sum}");
     assert_eq!(sum, 4890);
 
     let snafu_number = snafu_from_number(sum);
