@@ -1,5 +1,10 @@
 type Snafu = i64;
 
+const BASE: Snafu = 5;
+const MIN: Snafu = -2;
+const MAX: Snafu = 2;
+const SNAFU_DIGITS: [char; BASE as usize] = ['=', '-', '0', '1', '2'];
+
 fn number_from_snafu(snafu: &str) -> Snafu {
     snafu
         .chars()
@@ -11,7 +16,7 @@ fn number_from_snafu(snafu: &str) -> Snafu {
             '=' => -2,
             c => panic!("bad SNAFU: {c:?}"),
         })
-        .fold(0, |sum, d| sum * 5 + d)
+        .fold(0, |sum, d| sum * BASE + d)
 }
 
 #[test]
@@ -35,11 +40,6 @@ fn convert_to_number() {
     assert_eq!(number_from_snafu("1-0---0"), 12345);
     assert_eq!(number_from_snafu("1121-1110-1=0"), 314159265);
 }
-
-const BASE: Snafu = 5;
-const MIN: Snafu = -2;
-const MAX: Snafu = 2;
-const SNAFU_DIGITS: [char; BASE as usize] = ['=', '-', '0', '1', '2'];
 
 fn count_snafu_digits(n: Snafu, base: Snafu, max: Snafu) -> usize {
     let mut digit_count = 1;
