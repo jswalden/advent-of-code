@@ -110,6 +110,43 @@ pub fn parse_input(input: &'static str) -> impl Iterator<Item = ConditionRecord>
     input.trim().lines().map(|line| ConditionRecord::new(line))
 }
 
+pub fn parse_input_repeated(input: &'static str) -> impl Iterator<Item = ConditionRecord> {
+    input
+        .trim()
+        .lines()
+        .map(|line| ConditionRecord::new(line))
+        .map(
+            |ConditionRecord {
+                 springs: ref single_springs,
+                 damaged_run_lengths: ref single_damaged_run_lengths,
+             }| {
+                const N: usize = 5;
+
+                let springs = {
+                    let mut springs = single_springs.clone();
+                    for _ in 0..N - 1 {
+                        springs.push(Spring::Unknown);
+                        springs.extend_from_slice(single_springs);
+                    }
+                    springs
+                };
+
+                let damaged_run_lengths = {
+                    let mut damaged_run_lengths = vec![];
+                    for _ in 0..N {
+                        damaged_run_lengths.extend_from_slice(single_damaged_run_lengths);
+                    }
+                    damaged_run_lengths
+                };
+
+                ConditionRecord {
+                    springs,
+                    damaged_run_lengths,
+                }
+            },
+        )
+}
+
 fn main() {
     static INPUT: &str = include_str!("../input");
 
@@ -120,4 +157,12 @@ fn main() {
         .sum();
     println!("Sum: {sum}");
     assert_eq!(sum, 7307);
+
+    // Part 2.
+    println!("Part 2");
+    let sum: u64 = parse_input_repeated(INPUT)
+        .map(|rec| rec.count_valid_arrangements())
+        .sum();
+    println!("Sum: {sum}");
+    assert_eq!(sum, 3_415_570_893_842);
 }

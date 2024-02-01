@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::{parse_input, ConditionRecord};
+use crate::{parse_input, parse_input_repeated, ConditionRecord};
 
 fn line_to_valid_arrangements(line: &str) -> u64 {
     println!("-------------------------\nConsidering: {line}");
@@ -149,4 +149,12 @@ fn example() {
         .sum();
     println!("Sum: {sum}");
     assert_eq!(sum, 21);
+
+    // Part 2.
+    println!("Part 2");
+    let sum: u64 = parse_input_repeated(INPUT)
+        .map(|rec| rec.count_valid_arrangements())
+        .sum();
+    println!("Sum: {sum}");
+    assert_eq!(sum, 525152);
 }
