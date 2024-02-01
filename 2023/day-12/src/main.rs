@@ -41,8 +41,8 @@ impl ConditionRecord {
         let total_spring_count = self.springs.len();
         let damaged_sequence_count = self.damaged_run_lengths.len();
 
-        let mut incremental = vec![vec![0u64; total_spring_count + 2]; damaged_sequence_count + 1];
-        incremental[damaged_sequence_count][total_spring_count + 1] = 1;
+        let mut prev_counts = vec![0u64; total_spring_count + 2];
+        prev_counts[total_spring_count + 1] = 1;
 
         // Consider each damaged-length from last to first.
         for (d, damaged_len) in self.damaged_run_lengths.iter().copied().enumerate().rev() {
@@ -50,18 +50,20 @@ impl ConditionRecord {
 
             let mut nways = 0;
 
+            let mut curr_counts = vec![0u64; total_spring_count + 2];
+
             // Attempt to place a damaged-length at each possible location from end of spring sequence to start.
             for s in (0..total_spring_count).rev() {
                 nways = if let Some(Spring::Damaged) = self.springs.get(s + damaged_len) {
                     0
                 } else {
-                    match incremental[d + 1].get(s + damaged_len + 1) {
+                    match prev_counts.get(s + damaged_len + 1) {
                         Some(ways) => nways + *ways,
                         None => 0,
                     }
                 };
 
-                incremental[d][s] = match self.springs[s] {
+                curr_counts[s] = match self.springs[s] {
                     Spring::Working => {
                         possibly_damaged_run_len = 0;
                         0
@@ -84,21 +86,25 @@ impl ConditionRecord {
                     }
                 };
             }
+
+            prev_counts = curr_counts;
         }
 
-        println!("incremental:");
-        for row in incremental.iter() {
-            println!("{row:?}");
+        if false {
+            println!("final counts:");
+            println!("{prev_counts:?}");
         }
 
         let ans = Itertools::take_while_inclusive(
-            incremental[0].iter().take(total_spring_count).enumerate(),
+            prev_counts.iter().take(total_spring_count).enumerate(),
             |(s, _)| self.springs[*s] != Spring::Damaged,
         )
         .map(|(_s, ways)| *ways)
         .sum();
 
-        println!("Computed answer: {ans}");
+        if false {
+            println!("Computed answer: {ans}");
+        }
 
         ans
     }
